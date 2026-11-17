@@ -155,6 +155,8 @@ if st.session_state.get("active_screen") == "toppings":
     if not toppings:
         st.info("No toppings are listed in the menu.")
     if st.button("Return to order", type="primary", width="stretch"):
+        for widget_key, draft_key in widget_fields.items():
+            st.session_state[widget_key] = st.session_state["order_draft"][draft_key]
         st.session_state["active_screen"] = "order"
         st.rerun()
     st.stop()
