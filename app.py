@@ -69,18 +69,14 @@ def show_ticket(order):
     toppings = toppings_for_display(order)
 
     with st.container(border=True):
-        st.markdown(f"### Completed order #{order_number:02d}")
-        st.caption(order["completed_at"])
-        st.write(f"**Customer:** {order['customer_name']}")
-
-        details = st.columns(3)
-        details[0].write(f"**Size**\n\n{order['size']}")
-        details[1].write(f"**Flavor**\n\n{order['flavor']}")
-        details[2].write(f"**Mix level**\n\n{order['mix_level']}")
-
-        st.write("**Toppings**")
-        st.write(", ".join(toppings) if toppings else "Plain")
-        st.metric("Total", f"${float(order['total']):.2f}")
+        st.markdown(
+            f"**Order #{order_number:02d}** | **Customer:** {order['customer_name']} | "
+            f"**Time:** {order['completed_at']} | **Total:** ${float(order['total']):.2f}"
+        )
+        st.markdown(
+            f"**Size:** {order['size']} | **Flavor:** {order['flavor']} | "
+            f"**Mix:** {order['mix_level']} | **Toppings:** {', '.join(toppings) or 'Plain'}"
+        )
 
 
 st.set_page_config(page_title="Bober Custard POS", page_icon="🍦", layout="wide")
@@ -274,6 +270,11 @@ with history_tab:
             number_filter = st.text_input("Filter by order number", max_chars=2)
 
         number_query = number_filter.strip()
+        filter_signature = (name_filter.casefold(), number_query)
+        if st.session_state.get("history_filter_signature") != filter_signature:
+            st.session_state["history_filter_signature"] = filter_signature
+            st.session_state.pop("order_history_table", None)
+
         valid_number_query = not number_query or number_query.isdigit()
         filtered_orders = []
         for order in reversed(orders):
@@ -306,25 +307,19 @@ with history_tab:
                 table_rows.append(
                     {
                         "Order #": formatted_number,
-                        "Completed": order.get("completed_at", ""),
                         "Customer": order.get("customer_name", ""),
-                        "Size": order.get("size", ""),
-                        "Flavor": order.get("flavor", ""),
-                        "Mix level": order.get("mix_level", ""),
-                        "Toppings": ", ".join(toppings_for_display(order)) or "Plain",
+                        "Time": order.get("completed_at", ""),
                         "Total": formatted_total,
                     }
                 )
-            st.dataframe(table_rows, width="stretch", hide_index=True)
-
-            selected_order_number = st.selectbox(
-                "Review full order ticket",
-                [order["order_number"] for order in filtered_orders],
-                format_func=lambda number: f"Order #{int(number):02d}",
+            table_selection = st.dataframe(
+                table_rows,
+                width="stretch",
+                hide_index=True,
+                key="order_history_table",
+                on_select="rerun",
+                selection_mode="single-row",
             )
-            selected_order = next(
-                order
-                for order in filtered_orders
-                if order["order_number"] == selected_order_number
-            )
-            show_ticket(selected_order)
+            selected_rows = table_selection.selection.rows
+            if selected_rows and selected_rows[0] < len(filtered_orders):
+                show_ticket(filtered_orders[selected_rows[0]])
