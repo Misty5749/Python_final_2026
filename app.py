@@ -169,26 +169,14 @@ order_tab, history_tab = st.tabs(["New Order", "Order History"])
 
 with order_tab:
     st.subheader("Build a custard order")
-    with st.form("new_order_form", clear_on_submit=False):
-        customer_name = st.text_input("Customer name", key="pos_customer_name")
-        size_columns = st.columns(3)
-        with size_columns[0]:
-            selected_size = st.selectbox("Size", sizes, key="pos_size")
-        with size_columns[1]:
-            selected_flavor = st.selectbox("Flavor", flavors, key="pos_flavor")
-        with size_columns[2]:
-            selected_mix_level = st.selectbox(
-                "Mix level", mix_levels, key="pos_mix_level"
-            )
-        topping_summary = ", ".join(st.session_state["order_draft"]["toppings"])
-        st.caption(f"Toppings: {topping_summary or 'Plain'}")
-        choose_toppings, submitted = st.columns(2)
-        with choose_toppings:
-            open_toppings = st.form_submit_button("Choose toppings", width="stretch")
-        with submitted:
-            submitted = st.form_submit_button(
-                "Complete order", type="primary", width="stretch"
-            )
+    customer_name = st.text_input("Customer name", key="pos_customer_name")
+    size_columns = st.columns(3)
+    with size_columns[0]:
+        selected_size = st.selectbox("Size", sizes, key="pos_size")
+    with size_columns[1]:
+        selected_flavor = st.selectbox("Flavor", flavors, key="pos_flavor")
+    with size_columns[2]:
+        selected_mix_level = st.selectbox("Mix level", mix_levels, key="pos_mix_level")
 
     order_draft = st.session_state["order_draft"]
     order_draft.update(
@@ -199,6 +187,17 @@ with order_tab:
             "mix_level": selected_mix_level,
         }
     )
+    topping_summary = ", ".join(order_draft["toppings"])
+    st.caption(f"Toppings: {topping_summary or 'Plain'}")
+
+    button_columns = st.columns(2)
+    with button_columns[0]:
+        open_toppings = st.button(
+            "Choose toppings", key="open_toppings_button", width="stretch"
+        )
+    with button_columns[1]:
+        submitted = st.button("Complete order", type="primary", width="stretch")
+
     if open_toppings:
         st.session_state["active_screen"] = "toppings"
         st.rerun()
