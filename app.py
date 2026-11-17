@@ -84,8 +84,6 @@ def show_ticket(order):
 
 
 st.set_page_config(page_title="Bober Custard POS", page_icon="🍦", layout="wide")
-st.title("Bober Custard POS")
-st.caption("Create completed orders and review the order history.")
 
 menu = read_menu()
 sizes = menu.get("SIZES", [])
@@ -107,26 +105,103 @@ except ValueError:
     st.error("Menu prices must be numbers.")
     st.stop()
 
+default_order_draft = {
+    "customer_name": "",
+    "size": sizes[0],
+    "flavor": flavors[0],
+    "mix_level": mix_levels[0],
+    "toppings": [],
+}
+if "order_draft" not in st.session_state:
+    st.session_state["order_draft"] = default_order_draft.copy()
+
+widget_fields = {
+    "pos_customer_name": "customer_name",
+    "pos_size": "size",
+    "pos_flavor": "flavor",
+    "pos_mix_level": "mix_level",
+}
+if st.session_state.pop("reset_order_form", False):
+    st.session_state["order_draft"] = default_order_draft.copy()
+    for widget_key, draft_key in widget_fields.items():
+        st.session_state[widget_key] = default_order_draft[draft_key]
+
+if st.session_state.get("active_screen") == "toppings":
+    st.title("Choose toppings")
+    st.caption("Select or deselect each topping, then return to the order.")
+    selected_toppings = st.session_state["order_draft"]["toppings"]
+    st.caption(
+        f"{len(selected_toppings)} selected. The first two are included; "
+        f"additional toppings add ${max(0, len(selected_toppings) - 2):.2f}."
+    )
+
+    topping_columns = st.columns(3)
+    for index, topping in enumerate(toppings):
+        is_selected = topping in selected_toppings
+        button_label = f"{'✓' if is_selected else '+'} {topping}"
+        with topping_columns[index % len(topping_columns)]:
+            if st.button(
+                button_label,
+                key=f"topping_choice_{index}",
+                type="primary" if is_selected else "secondary",
+                width="stretch",
+            ):
+                if is_selected:
+                    selected_toppings.remove(topping)
+                else:
+                    selected_toppings.append(topping)
+                st.rerun()
+
+    if not toppings:
+        st.info("No toppings are listed in the menu.")
+    if st.button("Return to order", type="primary", width="stretch"):
+        st.session_state["active_screen"] = "order"
+        st.rerun()
+    st.stop()
+
+for widget_key, draft_key in widget_fields.items():
+    if widget_key not in st.session_state:
+        st.session_state[widget_key] = st.session_state["order_draft"][draft_key]
+
+st.title("Bober Custard POS")
+st.caption("Create completed orders and review the order history.")
 order_tab, history_tab = st.tabs(["New Order", "Order History"])
 
 with order_tab:
     st.subheader("Build a custard order")
-    with st.form("new_order_form", clear_on_submit=True):
-        customer_name = st.text_input("Customer name")
+    with st.form("new_order_form", clear_on_submit=False):
+        customer_name = st.text_input("Customer name", key="pos_customer_name")
         size_columns = st.columns(3)
         with size_columns[0]:
-            selected_size = st.selectbox("Size", sizes)
+            selected_size = st.selectbox("Size", sizes, key="pos_size")
         with size_columns[1]:
-            selected_flavor = st.selectbox("Flavor", flavors)
+            selected_flavor = st.selectbox("Flavor", flavors, key="pos_flavor")
         with size_columns[2]:
-            selected_mix_level = st.selectbox("Mix level", mix_levels)
-        selected_toppings = st.multiselect("Toppings", toppings)
-        st.caption(
-            "The first two toppings are included. Each additional topping is $1."
-        )
-        submitted = st.form_submit_button(
-            "Complete order", type="primary", width="stretch"
-        )
+            selected_mix_level = st.selectbox(
+                "Mix level", mix_levels, key="pos_mix_level"
+            )
+        topping_summary = ", ".join(st.session_state["order_draft"]["toppings"])
+        st.caption(f"Toppings: {topping_summary or 'Plain'}")
+        choose_toppings, submitted = st.columns(2)
+        with choose_toppings:
+            open_toppings = st.form_submit_button("Choose toppings", width="stretch")
+        with submitted:
+            submitted = st.form_submit_button(
+                "Complete order", type="primary", width="stretch"
+            )
+
+    order_draft = st.session_state["order_draft"]
+    order_draft.update(
+        {
+            "customer_name": customer_name,
+            "size": selected_size,
+            "flavor": selected_flavor,
+            "mix_level": selected_mix_level,
+        }
+    )
+    if open_toppings:
+        st.session_state["active_screen"] = "toppings"
+        st.rerun()
 
     if submitted:
         if not customer_name.strip():
@@ -154,7 +229,7 @@ with order_tab:
                 else:
                     order_number = random.choice(available_numbers)
                     total = prices_by_size[selected_size] + max(
-                        0, len(selected_toppings) - 2
+                        0, len(order_draft["toppings"]) - 2
                     )
                     order = {
                         "order_number": f"{order_number:02d}",
@@ -163,7 +238,7 @@ with order_tab:
                         "size": selected_size,
                         "flavor": selected_flavor,
                         "mix_level": selected_mix_level,
-                        "toppings": json.dumps(selected_toppings),
+                        "toppings": json.dumps(order_draft["toppings"]),
                         "total": f"{total:.2f}",
                         "status": "Complete",
                     }
@@ -173,9 +248,11 @@ with order_tab:
                         st.error(f"Could not save the order: {error}")
                     else:
                         st.session_state["latest_order"] = order
-                        st.success("Order saved as complete.")
+                        st.session_state["reset_order_form"] = True
+                        st.rerun()
 
     if "latest_order" in st.session_state:
+        st.success("Order saved as complete.")
         show_ticket(st.session_state["latest_order"])
 
 with history_tab:
